@@ -1,0 +1,13 @@
+# dsh-gold-monitor bundle patch
+#
+# Declared via `dsh.bundle.patch`: when installed through
+#
+#   dsh plugin --profile <name> add <path-to-this-package>
+#
+# the CLI reconciles `dsh.profile.bundles` against installed packages and,
+# seeing this declaration, appends `dsh-gold-monitor` to the bundle stack.
+# The profile boot then merges THIS patch (a single `insert` of the plugin
+# row) exactly like a manual mount line in the profile's cordis.patch.yml.
+- insert:
+    - id: gold-monitor
+      name: 'dsh-gold-monitor'

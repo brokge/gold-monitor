@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黄金实时监控 · Gold Live Monitor</title>
+<style>
+  :root {
+    --bg: #0b0e13;
+    --panel: #12161f;
+    --panel-2: #171c28;
+    --line: #232a3a;
+    --text: #e8ecf4;
+    --muted: #8b94a7;
+    --gold: #e8b64c;
+    --gold-soft: rgba(232, 182, 76, 0.12);
+    --green: #34d399;
+    --red: #f87171;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 80% -10%, rgba(232, 182, 76, 0.06), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+    padding: 0 20px 40px;
+  }
+  header {
+    max-width: 1080px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .logo { font-size: 19px; font-weight: 700; letter-spacing: 0.5px; }
+  .logo b { color: var(--gold); }
+  .logo small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 12px; letter-spacing: 2px; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #64748b; box-shadow: 0 0 8px currentColor; }
+  .dot.ok { background: var(--green); color: var(--green); animation: pulse 2s infinite; }
+  .dot.err { background: var(--red); color: var(--red); }
+  .dot.paused { background: var(--gold); color: var(--gold); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  main { max-width: 1080px; margin: 26px auto 0; display: flex; flex-direction: column; gap: 18px; }
+
+  .hero { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } }
+  .price-box {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 26px;
+    position: relative;
+    overflow: hidden;
+  }
+  .price-box::after {
+    content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px;
+    background: radial-gradient(circle, var(--gold-soft), transparent 70%);
+    pointer-events: none;
+  }
+  .label { color: var(--muted); font-size: 13px; letter-spacing: 1px; }
+  .price {
+    font-family: var(--mono); font-size: 52px; font-weight: 700; line-height: 1.15;
+    margin: 8px 0 6px; font-variant-numeric: tabular-nums;
+  }
+  .price-box.cny .price { font-size: 40px; color: var(--gold); }
+  .sub { font-size: 14px; color: var(--muted); }
+  .sub b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .up { color: var(--red) !important; }
+  .down { color: var(--green) !important; }
+  .flat { color: var(--muted) !important; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .stat .k { color: var(--muted); font-size: 12px; letter-spacing: 1px; }
+  .stat .v { font-family: var(--mono); font-size: 22px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .card-title { color: var(--muted); font-size: 13px; letter-spacing: 1px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: baseline; }
+  canvas { width: 100%; height: 260px; display: block; }
+
+  .hist-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .hist-tabs button {
+    background: var(--panel-2); color: var(--muted);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 16px; font-size: 13px; cursor: pointer;
+  }
+  .hist-tabs button:hover { color: var(--text); }
+  .hist-tabs button.active { background: var(--gold); color: #201503; border-color: var(--gold); font-weight: 600; }
+  .hist-summary { font-size: 13px; color: var(--muted); margin-bottom: 10px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .hist-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  #fxChart { height: 44px; margin-top: 12px; }
+  .fx-line { font-size: 13px; }
+  .hist-legend { display: flex; gap: 18px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+  .hist-legend label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .hist-legend input { accent-color: var(--gold); }
+  .swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
+  .ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  select, input[type="number"] {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: var(--mono);
+    outline: none;
+  }
+  select:focus, input[type="number"]:focus { border-color: var(--gold); }
+  input[type="number"] { width: 110px; }
+  button {
+    background: var(--gold); color: #201503; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  button.ghost {
+    background: transparent; color: var(--text); border: 1px solid var(--line);
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .banner {
+    background: var(--gold-soft); border: 1px solid var(--gold); color: var(--gold);
+    border-radius: 10px; padding: 12px 16px; font-size: 14px; display: none;
+  }
+  .banner.show { display: block; animation: fadein 0.3s ease; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+
+  footer { max-width: 1080px; margin: 26px auto 0; color: var(--muted); font-size: 12px; text-align: center; }
+  footer a { color: var(--gold); text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">◆ GOLD<b>LIVE</b><small>实时监控</small></div>
+  <div class="status">
+    <span id="dot" class="dot"></span>
+    <span id="statusText">连接中…</span>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="price-box">
+      <div class="label">国际现货黄金 XAU/USD · 美元/盎司</div>
+      <div class="price" id="priceUsd">—</div>
+      <div class="sub" id="changeLine">等待数据…</div>
+    </div>
+    <div class="price-box cny">
+      <div class="label">折合人民币 · 元/克</div>
+      <div class="price" id="priceCny">—</div>
+      <div class="sub fx-line" id="fxLine">USD/CNY —</div>
+      <div class="sub" id="fxImpact" style="font-size:12px;color:var(--muted)"></div>
+      <canvas id="fxChart"></canvas>
+      <div class="sub" id="cnyNote" style="margin-top:8px">数据源更新于 —</div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><div class="k">本次会话开盘</div><div class="v" id="statOpen">—</div></div>
+    <div class="stat"><div class="k">本次会话最高</div><div class="v up" id="statHigh">—</div></div>
+    <div class="stat"><div class="k">本次会话最低</div><div class="v down" id="statLow">—</div></div>
+    <div class="stat"><div class="k">上次更新</div><div class="v" id="statAge" style="font-size:16px;padding-top:4px">—</div></div>
+  </section>
+
+  <section class="card">
+    <div class="card-title"><span>实时走势（本次会话，美元/盎司）</span><span id="sampleCount" style="font-family:var(--mono)"></span></div>
+    <canvas id="chart"></canvas>
+  </section>
+
+  <section class="card">
+    <div class="card-title"><span>历史走势（美元/盎司 + 人民币/克）</span><span id="histSource" style="font-weight:400"></span></div>
+    <div class="hist-tabs" id="histTabs">
+      <button data-range="1m" class="active">1月</button>
+      <button data-range="6m">6月</button>
+      <button data-range="1y">1年</button>
+      <button data-range="5y">5年</button>
+      <button data-range="all">全部</button>
+    </div>
+    <div class="hist-legend">
+      <label><span class="swatch" style="background:#e8b64c"></span><input type="checkbox" id="chkUsd" checked> 美元/盎司</label>
+      <label><span class="swatch" style="background:#60a5fa"></span><input type="checkbox" id="chkCny" checked> 人民币/克</label>
+    </div>
+    <div class="hist-summary" id="histSummary">加载中…</div>
+    <canvas id="histChart"></canvas>
+    <div class="hist-note" id="histNote"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-title"><span>监控设置</span><span style="font-weight:400">提醒通过浏览器通知 + 页内横幅弹出</span></div>
+    <div class="controls">
+      <div class="ctl">
+        自动刷新
+        <select id="interval">
+          <option value="10">10 秒</option>
+          <option value="20" selected>20 秒</option>
+          <option value="30">30 秒</option>
+          <option value="60">60 秒</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <button id="btnPause" class="ghost">暂停</button>
+        <button id="btnRefresh" class="ghost">立即刷新</button>
+      </div>
+      <div class="ctl">
+        价格突破提醒（美元/盎司）
+        <input type="number" id="alertUpper" placeholder="高于…" step="1" min="0">
+        <input type="number" id="alertLower" placeholder="低于…" step="1" min="0">
+        <button id="btnNotify">开启通知</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="banner" id="alertBanner"></div>
+</main>
+
+<footer>
+  实时数据：<a href="https://api.gold-api.com" target="_blank" rel="noopener">api.gold-api.com</a>（约 20 秒缓存）· 历史数据：<a href="https://api.nbp.pl" target="_blank" rel="noopener">NBP 波兰央行</a> / <a href="https://goldprice.dev" target="_blank" rel="noopener">goldprice.dev</a> / <a href="https://freegoldapi.com" target="_blank" rel="noopener">freegoldapi.com</a> · 汇率：<a href="https://frankfurter.dev" target="_blank" rel="noopener">ECB 参考汇率（frankfurter.dev）</a> · 换算汇率 1 盎司 = 31.1034768 克
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var OZ_TO_GRAM = 31.1034768;
+  var MAX_POINTS = 300;
+
+  var samples = [];            // { t: Date, usd: number, cny: number, fx: number|null }
+  var paused = false;
+  var intervalSec = 20;
+  var timer = null;
+  var lastFetchAt = 0;
+  var lastUsd = null;
+  var notified = false;        // 仅横幅提醒是否已展示
+  var crossedUpper = false;    // 当前是否处于“高于上阈值”状态
+  var crossedLower = false;
+
+  var els = {
+    dot: $("dot"), statusText: $("statusText"),
+    priceUsd: $("priceUsd"), priceCny: $("priceCny"),
+    changeLine: $("changeLine"), cnyNote: $("cnyNote"),
+    fxLine: $("fxLine"), fxImpact: $("fxImpact"), fxChart: $("fxChart"),
+    statOpen: $("statOpen"), statHigh: $("statHigh"),
+    statLow: $("statLow"), statAge: $("statAge"),
+    sampleCount: $("sampleCount"), chart: $("chart"),
+    interval: $("interval"), btnPause: $("btnPause"), btnRefresh: $("btnRefresh"),
+    alertUpper: $("alertUpper"), alertLower: $("alertLower"),
+    btnNotify: $("btnNotify"), banner: $("alertBanner")
+  };
+
+  function fmt(n, digits) {
+    if (n === null || n === undefined || isNaN(n)) return "—";
+    return n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  }
+
+  function setStatus(kind, text) {
+    els.dot.className = "dot " + kind;
+    els.statusText.textContent = text;
+  }
+
+  function showBanner(msg) {
+    els.banner.textContent = msg;
+    els.banner.classList.add("show");
+    notified = true;
+    clearTimeout(showBanner._t);
+    showBanner._t = setTimeout(function () { els.banner.classList.remove("show"); notified = false; }, 12000);
+  }
+
+  function beep() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+      setTimeout(function () { ctx.close(); }, 500);
+    } catch (e) { /* 音频不可用时忽略 */ }
+  }
+
+  function notify(msg) {
+    beep();
+    if ("Notification" in window && Notification.permission === "granted") {
+      try { new Notification("黄金价格提醒", { body: msg }); } catch (e) {}
+    }
+    showBanner(msg);
+  }
+
+  function checkAlerts() {
+    if (lastUsd === null) return;
+    var upper = parseFloat(els.alertUpper.value);
+    var lower = parseFloat(els.alertLower.value);
+    if (!isNaN(upper) && lastUsd > upper && !crossedUpper) {
+      crossedUpper = true;
+      notify("⚠ 价格突破上方阈值：$" + fmt(lastUsd, 2) + " > $" + fmt(upper, 0));
+    } else if (!isNaN(upper) && lastUsd <= upper) {
+      crossedUpper = false;
+    }
+    if (!isNaN(lower) && lastUsd < lower && !crossedLower) {
+      crossedLower = true;
+      notify("⚠ 价格跌破下方阈值：$" + fmt(lastUsd, 2) + " < $" + fmt(lower, 0));
+    } else if (!isNaN(lower) && lastUsd >= lower) {
+      crossedLower = false;
+    }
+  }
+
+  function renderStats() {
+    if (!samples.length) return;
+    var open = samples[0].usd, high = -Infinity, low = Infinity;
+    samples.forEach(function (s) { if (s.usd > high) high = s.usd; if (s.usd < low) low = s.usd; });
+    els.statOpen.textContent = "$" + fmt(open, 2);
+    els.statHigh.textContent = "$" + fmt(high, 2);
+    els.statLow.textContent = "$" + fmt(low, 2);
+  }
+
+  function renderPrice() {
+    if (samples.length === 0) return;
+    var s = samples[samples.length - 1];
+    var prev = samples.length > 1 ? samples[samples.length - 2].usd : s.usd;
+    var cls, arrow, txt;
+    if (prev !== null && s.usd > prev) { cls = "up"; arrow = "▲"; }
+    else if (prev !== null && s.usd < prev) { cls = "down"; arrow = "▼"; }
+    else { cls = "flat"; arrow = "—"; }
+
+    els.priceUsd.textContent = "$" + fmt(s.usd, 2);
+    els.priceUsd.className = "price " + cls;
+
+    var sinceOpen = samples[0] ? ((s.usd - samples[0].usd) / samples[0].usd) * 100 : 0;
+    var sinceOpenCls = sinceOpen > 0 ? "up" : (sinceOpen < 0 ? "down" : "flat");
+    els.changeLine.innerHTML =
+      arrow + " 较上次 " + (cls === "flat" ? "持平" : (cls === "up" ? "+" + fmt(s.usd - prev, 2) : "-" + fmt(prev - s.usd, 2))) +
+      " · <b>会话涨跌 " + (sinceOpen >= 0 ? "+" : "") + sinceOpen.toFixed(2) + "%</b>";
+    els.changeLine.className = "sub " + sinceOpenCls;
+
+    if (s.cny !== null) {
+      var gram = s.cny / OZ_TO_GRAM;
+      els.priceCny.textContent = "¥" + fmt(gram, 2);
+    } else {
+      els.priceCny.textContent = "—";
+    }
+
+    // 汇率面板 + 汇率影响拆分：人民币计价 ≈ 美元金价 × 汇率
+    if (s.fx !== null && s.fx !== undefined) {
+      var first = samples[0];
+      var fxCls = "flat", fxArrow = "—";
+      if (first && first.fx !== undefined && s.fx !== first.fx) {
+        if (s.fx > first.fx) { fxCls = "up"; fxArrow = "▲"; }
+        else { fxCls = "down"; fxArrow = "▼"; }
+      }
+      els.fxLine.innerHTML =
+        "USD/CNY <b>" + fmt(s.fx, 4) + "</b> <span class='" + fxCls + "'>" + fxArrow + "</span>" +
+        (first && first.fx !== undefined
+          ? " · 较会话 " + (s.fx >= first.fx ? "+" : "") + (((s.fx - first.fx) / first.fx) * 100).toFixed(2) + "%"
+          : "");
+      if (first && first.fx !== undefined && first.cny !== null && s.cny !== null) {
+        var usdChg = ((s.usd - first.usd) / first.usd) * 100;
+        var fxChg = ((s.fx - first.fx) / first.fx) * 100;
+        var cnyGram0 = first.cny / OZ_TO_GRAM, cnyGram1 = s.cny / OZ_TO_GRAM;
+        var cnyChg = ((cnyGram1 - cnyGram0) / cnyGram0) * 100;
+        els.fxImpact.innerHTML =
+          "人民币计价 <b class='" + (cnyChg >= 0 ? "up" : "down") + "'>" + (cnyChg >= 0 ? "+" : "") + cnyChg.toFixed(2) + "%</b> ≈ " +
+          "美元金价 " + (usdChg >= 0 ? "+" : "") + usdChg.toFixed(2) + "% × 汇率 " + (fxChg >= 0 ? "+" : "") + fxChg.toFixed(2) + "%";
+      } else {
+        els.fxImpact.textContent = "";
+      }
+    } else {
+      els.fxLine.textContent = "USD/CNY —";
+      els.fxImpact.textContent = "";
+    }
+    drawFxSpark();
+  }
+
+  // 汇率会话迷你走势（USD/CNY）
+  function drawFxSpark() {
+    var canvas = els.fxChart;
+    if (!canvas) return;
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    if (W === 0 || H === 0) return;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var vals = samples.filter(function (s) { return s.fx !== undefined && s.fx !== null; })
+                      .map(function (s) { return s.fx; });
+    if (vals.length < 2) {
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("等待汇率数据…", W / 2, H / 2 + 4);
+      return;
+    }
+
+    var padT = 4, padB = 4, padL = 8, padR = 8;
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    if (max - min < 1e-9) { min -= 1e-4; max += 1e-4; }
+    var span = max - min;
+    min -= span * 0.15; max += span * 0.15;
+
+    function X(i) { return padL + (W - padL - padR) * (i / (vals.length - 1)); }
+    function Y(v) { return padT + (H - padT - padB) * (1 - (v - min) / (max - min)); }
+
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(96,165,250,0.9)";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(X(0), Y(vals[0]));
+    for (var i = 1; i < vals.length; i++) ctx.lineTo(X(i), Y(vals[i]));
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(96,165,250,0.9)";
+    ctx.beginPath(); ctx.arc(X(0), Y(vals[0]), 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(vals.length - 1), Y(vals[vals.length - 1]), 2.5, 0, Math.PI * 2); ctx.fill();
+
+    ctx.font = "10px " + getComputedStyle(document.body).getPropertyValue("--mono");
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillText(fmt(max, 3), padL, padT + 8);
+    ctx.fillText(fmt(min, 3), padL, H - padB);
+  }
+
+  function drawChart() {
+    var canvas = els.chart;
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    if (W === 0 || H === 0) return;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    if (samples.length < 2) {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("正在收集走势数据…", W / 2, H / 2);
+      return;
+    }
+
+    var padL = 10, padR = 64, padT = 14, padB = 24;
+    var vals = samples.map(function (s) { return s.usd; });
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    if (max - min < 1e-9) { min -= 1; max += 1; }
+    var span = max - min;
+    min -= span * 0.08; max += span * 0.08;
+
+    function X(i) { return padL + (W - padL - padR) * (i / (samples.length - 1)); }
+    function Y(v) { return padT + (H - padT - padB) * (1 - (v - min) / (max - min)); }
+
+    // 网格与 Y 轴刻度
+    ctx.lineWidth = 1;
+    ctx.font = "11px " + getComputedStyle(document.body).getPropertyValue("--mono");
+    ctx.textAlign = "right";
+    var steps = 4;
+    for (var i = 0; i <= steps; i++) {
+      var v = min + (max - min) * (i / steps);
+      var yy = Y(v);
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillText(v.toFixed(0), W - padR + 4, yy + 3);
+    }
+
+    // 面积填充
+    var grad = ctx.createLinearGradient(0, padT, 0, H - padB);
+    grad.addColorStop(0, "rgba(232,182,76,0.28)");
+    grad.addColorStop(1, "rgba(232,182,76,0.01)");
+    ctx.beginPath();
+    ctx.moveTo(X(0), Y(vals[0]));
+    for (var j = 1; j < vals.length; j++) ctx.lineTo(X(j), Y(vals[j]));
+    ctx.lineTo(X(vals.length - 1), H - padB);
+    ctx.lineTo(X(0), H - padB);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 价格线
+    ctx.beginPath();
+    ctx.moveTo(X(0), Y(vals[0]));
+    for (var k = 1; k < vals.length; k++) ctx.lineTo(X(k), Y(vals[k]));
+    ctx.strokeStyle = "#e8b64c";
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    // 末点
+    var lx = X(vals.length - 1), ly = Y(vals[vals.length - 1]);
+    ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#e8b64c"; ctx.fill();
+    ctx.beginPath(); ctx.arc(lx, ly, 7, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(232,182,76,0.35)"; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // 时间轴
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    function ts(t) {
+      var d = new Date(t);
+      function p(n) { return (n < 10 ? "0" : "") + n; }
+      return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+    }
+    ctx.fillText(ts(samples[0].t), padL + 2, H - 6);
+    ctx.fillText(ts(samples[samples.length - 1].t), W - padR - 2, H - 6);
+
+    els.sampleCount.textContent = samples.length + " 个采样点";
+  }
+
+  function renderAll() {
+    renderPrice();
+    renderStats();
+    drawChart();
+  }
+
+  function applySample(usd, cny, fx, apiTime) {
+    var now = Date.now();
+    samples.push({ t: now, usd: usd, cny: cny, fx: fx });
+    if (samples.length > MAX_POINTS) samples.shift();
+    lastUsd = usd;
+    lastFetchAt = now;
+    els.cnyNote.textContent = "数据源更新于 " + apiTime;
+    setStatus("ok", "实时连接中 · 上次更新 0 秒前");
+    checkAlerts();
+    renderAll();
+  }
+
+  function fetchPrice() {
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, 9000);
+    return Promise.all([
+      fetch("https://api.gold-api.com/price/XAU/USD", { signal: ctrl.signal }).then(function (r) {
+        if (!r.ok) throw new Error("USD " + r.status); return r.json();
+      }),
+      fetch("https://api.gold-api.com/price/XAU/CNY", { signal: ctrl.signal }).then(function (r) {
+        if (!r.ok) throw new Error("CNY " + r.status); return r.json();
+      })
+    ]).then(function (results) {
+      clearTimeout(t);
+      var usd = results[0].price;
+      var cny = results[1] ? results[1].price : null;
+      var fx = results[1] && results[1].exchangeRate !== undefined ? results[1].exchangeRate : null;
+      applySample(usd, cny, fx, results[0].updatedAt || results[1].updatedAt || "—");
+      return true;
+    }).catch(function (err) {
+      clearTimeout(t);
+      setStatus("err", "获取失败：" + (err && err.name === "AbortError" ? "请求超时" : "网络错误") + " · 将自动重试");
+      return false;
+    });
+  }
+
+  function schedule() {
+    clearInterval(timer);
+    timer = setInterval(function () {
+      if (!paused) fetchPrice();
+    }, intervalSec * 1000);
+  }
+
+  // 每秒更新“上次更新”显示
+  setInterval(function () {
+    if (!lastFetchAt) return;
+    var sec = Math.floor((Date.now() - lastFetchAt) / 1000);
+    els.statAge.textContent = sec < 60 ? sec + " 秒前" : Math.floor(sec / 60) + " 分钟前";
+    if (!paused && sec > intervalSec * 3) setStatus("err", "数据可能已滞后，检查网络");
+  }, 1000);
+
+  // 窗口尺寸变化时重绘图表
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(function () { drawChart(); }).observe(els.chart);
+  }
+  window.addEventListener("resize", drawChart);
+
+  els.interval.addEventListener("change", function () {
+    intervalSec = parseInt(els.interval.value, 10) || 20;
+    schedule();
+  });
+
+  els.btnPause.addEventListener("click", function () {
+    paused = !paused;
+    els.btnPause.textContent = paused ? "继续" : "暂停";
+    setStatus(paused ? "paused" : "ok", paused ? "已暂停自动刷新" : "实时连接中");
+    if (!paused) fetchPrice();
+  });
+
+  els.btnRefresh.addEventListener("click", function () {
+    if (!paused) fetchPrice();
+  });
+
+  els.btnNotify.addEventListener("click", function () {
+    if (!("Notification" in window)) {
+      showBanner("当前浏览器不支持系统通知，将仅使用页内横幅提醒");
+      return;
+    }
+    Notification.requestPermission().then(function (p) {
+      els.btnNotify.textContent = p === "granted" ? "通知已开启 ✓" : "通知被拒绝";
+    });
+  });
+
+  /* ---------- 历史走势 ---------- */
+  var histTabs = $("histTabs"), histSummary = $("histSummary"),
+      histSource = $("histSource"), histChart = $("histChart"), histNote = $("histNote");
+  var histCache = {};      // range -> {points, source, fallback}
+  var histFallback = null; // freegoldapi 原始数据（降级源）
+  var histActive = "1m";
+  var showUsd = true, showCny = true;
+
+  function fmtDate(d) { return String(d).slice(0, 10); }
+
+  function fetchJSON(url, timeoutMs) {
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, timeoutMs);
+    return fetch(url, { signal: ctrl.signal }).then(function (r) {
+      clearTimeout(t);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).catch(function (e) { clearTimeout(t); throw e; });
+  }
+
+  function drawHistChart(points) {
+    var canvas = histChart;
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    if (W === 0 || H === 0) return;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    if (!points || points.length < 2) {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("暂无足够数据", W / 2, H / 2);
+      return;
+    }
+
+    var padL = 10, padR = 64, padT = 14, padB = 24;
+    var closes = points.map(function (p) { return p.close; });
+    var hasCny = points.some(function (p) { return p.cnyGram !== undefined; });
+    var cnyVals = hasCny ? points.map(function (p) { return p.cnyGram; }) : null;
+
+    // 左轴（美元/盎司）范围
+    var min = Math.min.apply(null, closes), max = Math.max.apply(null, closes);
+    var hi = -Infinity, lo = Infinity;
+    points.forEach(function (p) {
+      if (p.high !== undefined && p.high > hi) hi = p.high;
+      if (p.low !== undefined && p.low < lo) lo = p.low;
+    });
+    if (isFinite(hi) && isFinite(lo)) { min = Math.min(min, lo); max = Math.max(max, hi); }
+    if (max - min < 1e-9) { min -= 1; max += 1; }
+    var span = max - min;
+    min -= span * 0.08; max += span * 0.08;
+
+    // 右轴（人民币/克）范围
+    var min2 = null, max2 = null;
+    if (cnyVals) {
+      min2 = Math.min.apply(null, cnyVals); max2 = Math.max.apply(null, cnyVals);
+      if (max2 - min2 < 1e-9) { min2 -= 1; max2 += 1; }
+      var span2 = max2 - min2;
+      min2 -= span2 * 0.08; max2 += span2 * 0.08;
+    }
+
+    function X(i) { return padL + (W - padL - padR) * (i / (points.length - 1)); }
+    function Y(v) { return padT + (H - padT - padB) * (1 - (v - min) / (max - min)); }
+    function Y2(v) { return padT + (H - padT - padB) * (1 - (v - min2) / (max2 - min2)); }
+
+    // 网格 + 左轴刻度
+    ctx.lineWidth = 1;
+    ctx.textAlign = "right";
+    var steps = 4;
+    for (var i = 0; i <= steps; i++) {
+      var v = min + (max - min) * (i / steps);
+      var yy = Y(v);
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillText(v.toFixed(0), W - padR + 4, yy + 3);
+    }
+
+    // 右轴刻度（蓝，标在左上/左下）
+    if (cnyVals && showCny) {
+      ctx.fillStyle = "rgba(96,165,250,0.75)";
+      ctx.fillText(fmt(max2, 1), padL + 2, padT + 8);
+      ctx.fillText(fmt(min2, 1), padL + 2, H - padB);
+    }
+
+    function line(series, mapper, color, width, fillAlpha) {
+      ctx.beginPath();
+      ctx.moveTo(X(0), mapper(series[0]));
+      for (var j = 1; j < series.length; j++) ctx.lineTo(X(j), mapper(series[j]));
+      if (fillAlpha) {
+        ctx.save();
+        ctx.lineTo(X(series.length - 1), H - padB);
+        ctx.lineTo(X(0), H - padB);
+        ctx.closePath();
+        var g = ctx.createLinearGradient(0, padT, 0, H - padB);
+        g.addColorStop(0, fillAlpha);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.restore();
+        ctx.beginPath();
+        ctx.moveTo(X(0), mapper(series[0]));
+        for (var k = 1; k < series.length; k++) ctx.lineTo(X(k), mapper(series[k]));
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    if (showUsd) {
+      line(closes, Y, "#e8b64c", 2, "rgba(232,182,76,0.22)");
+      var lx = X(closes.length - 1), ly = Y(closes[closes.length - 1]);
+      ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#e8b64c"; ctx.fill();
+    }
+    if (cnyVals && showCny) {
+      line(cnyVals, Y2, "#60a5fa", 1.8, "rgba(96,165,250,0.15)");
+      var lx2 = X(cnyVals.length - 1), ly2 = Y2(cnyVals[cnyVals.length - 1]);
+      ctx.beginPath(); ctx.arc(lx2, ly2, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#60a5fa"; ctx.fill();
+    }
+
+    // 时间轴（首 / 中 / 末）
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    var mid = Math.floor(points.length / 2);
+    ctx.fillText(fmtDate(points[0].t), padL + 2, H - 6);
+    ctx.fillText(fmtDate(points[mid].t), X(mid), H - 6);
+    ctx.fillText(fmtDate(points[points.length - 1].t), W - padR - 2, H - 6);
+  }
+
+  function renderHist(points, source, isFallback) {
+    histSource.textContent = source + (points.length ? " · " + points.length + " 个交易日" : "");
+    histNote.textContent = isFallback
+      ? "⚠ 本地服务器不可用，已降级为 freegoldapi 静态数据（更新至 2026-02-20）。启动服务器（node server.mjs）可获得 NBP 每日最新数据与人民币计价曲线。"
+      : "";
+    var first = points[0], last = points[points.length - 1];
+    var chg = ((last.close - first.close) / first.close) * 100;
+    var cls = chg > 0 ? "up" : (chg < 0 ? "down" : "flat");
+    var html =
+      "美元 <b>$" + fmt(last.close, 2) + "</b>（<b class='" + cls + "'>" +
+      (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%</b>）";
+    var hasCny = points.some(function (p) { return p.cnyGram !== undefined; });
+    if (hasCny && last.cnyGram !== undefined && first.cnyGram !== undefined) {
+      var cnyChg = ((last.cnyGram - first.cnyGram) / first.cnyGram) * 100;
+      var cnyCls = cnyChg > 0 ? "up" : (cnyChg < 0 ? "down" : "flat");
+      html += " · 人民币 <b>¥" + fmt(last.cnyGram, 2) + "/克</b>（<b class='" + cnyCls + "'>" +
+        (cnyChg >= 0 ? "+" : "") + cnyChg.toFixed(2) + "%</b>）";
+    }
+    html += " · 区间 " + fmtDate(first.t) + " → " + fmtDate(last.t);
+    histSummary.innerHTML = html;
+    drawHistChart(points);
+  }
+
+  // 降级源：freegoldapi（跨域直连）——yahoo 日度优先，worldbank 月度补充
+  function fallbackPoints(fg, range) {
+    var now = new Date();
+    var from = new Date(now);
+    if (range === "6m") from.setMonth(from.getMonth() - 6);
+    else if (range === "1y") from.setFullYear(from.getFullYear() - 1);
+    else if (range === "5y") from.setFullYear(from.getFullYear() - 5);
+    else from = new Date("1968-01-01");
+    var fromIso = fmtDate(from);
+    var rows = fg.filter(function (x) { return x.date >= fromIso && x.price !== null && x.price !== undefined; });
+    var y = rows.filter(function (x) { return x.source === "yahoo_finance"; });
+    var wb = rows.filter(function (x) { return x.source === "worldbank"; });
+    var merged = y.concat(wb).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var seen = {}, out = [];
+    merged.forEach(function (r) {
+      if (!seen[r.date]) { seen[r.date] = true; out.push({ t: r.date, close: r.price }); }
+    });
+    return out;
+  }
+
+  function loadHistory(range) {
+    histActive = range;
+    var tabs = histTabs.querySelectorAll("button");
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle("active", tabs[i].getAttribute("data-range") === range);
+    }
+
+    if (histCache[range]) {
+      renderHist(histCache[range].points, histCache[range].source, histCache[range].fallback);
+      return;
+    }
+
+    histSummary.textContent = "加载中…";
+    // 优先：本地服务器代理（NBP 每日 / goldprice.dev）
+    fetchJSON("./api/history?range=" + range, 15000).then(function (data) {
+      if (!data.points || !data.points.length) throw new Error("empty");
+      histCache[range] = { points: data.points, source: data.source, fallback: false };
+      renderHist(data.points, data.source, false);
+    }).catch(function () {
+      // 降级：freegoldapi.com 静态数据（浏览器可直连）
+      var p = histFallback ? Promise.resolve(histFallback) : fetchJSON("https://freegoldapi.com/data/latest.json", 25000);
+      p.then(function (fg) {
+        histFallback = fg;
+        var pts = fallbackPoints(fg, range);
+        if (pts && pts.length) {
+          histCache[range] = { points: pts, source: "freegoldapi.com（混合源）", fallback: true };
+          renderHist(pts, "freegoldapi.com（混合源）", true);
+        } else {
+          histSummary.textContent = "历史数据获取失败：请启动本地服务器（node server.mjs）后重试";
+        }
+      }).catch(function () {
+        histSummary.textContent = "历史数据获取失败：请启动本地服务器（node server.mjs）后重试";
+      });
+    });
+  }
+
+  histTabs.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("button[data-range]") : null;
+    if (btn) loadHistory(btn.getAttribute("data-range"));
+  });
+
+  // 曲线显隐切换
+  $("chkUsd").addEventListener("change", function () {
+    showUsd = $("chkUsd").checked;
+    drawHistChart(histCache[histActive] ? histCache[histActive].points : null);
+  });
+  $("chkCny").addEventListener("change", function () {
+    showCny = $("chkCny").checked;
+    drawHistChart(histCache[histActive] ? histCache[histActive].points : null);
+  });
+
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(function () {
+      drawHistChart(histCache[histActive] ? histCache[histActive].points : null);
+    }).observe(histChart);
+  }
+  window.addEventListener("resize", function () {
+    drawHistChart(histCache[histActive] ? histCache[histActive].points : null);
+  });
+
+  loadHistory("1m");
+  // 历史数据每 10 分钟静默刷新（服务器端有缓存，代价低）
+  setInterval(function () {
+    var r = histActive;
+    if (histCache[r] && !histCache[r].fallback) {
+      delete histCache[r];
+      loadHistory(r);
+    }
+  }, 600000);
+
+  // 首轮立即拉取
+  fetchPrice();
+  schedule();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "dsh-gold-monitor",
+  "version": "0.1.0",
+  "description": "DSH web plugin: 黄金实时监控看板 (Gold Live Monitor) — live XAU/USD price, 人民币/克 conversion, session chart, price alerts and history. Adds a floating overlay panel (opened from a sidebar footer button) hosting the full gold-monitor dashboard served same-origin by the host half.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "public",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "license": "MIT"
+}
