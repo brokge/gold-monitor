@@ -4,12 +4,11 @@
 [![Platform](https://img.shields.io/badge/platform-Web%20%7C%20DSH%20Plugin-0b0e13)](#-作为-dsh-web-插件使用)
 [![Language](https://img.shields.io/badge/language-HTML%20%2F%20JS%20%2F%20Node.js-e8b64c)](#)
 
+![Gold Live Monitor preview](preview.jpg)
+
 国际现货黄金（XAU/USD）与人民币折算价格（元/克）的实时监控看板。
 单文件页面即可运行，同时内置 DSH Web 插件（`dsh-gold-monitor`），可嵌入 DeepSeek Harness 的浏览器界面。
-![Gold Live Monitor preview](preview.jpg)
-<p align="center">
-  <img src="preview.jpg" width="820" alt="Gold Live Monitor 界面预览（1440×900）">
-</p>
+
 
 ## 功能特性
 
