@@ -6,7 +6,7 @@
 
 国际现货黄金（XAU/USD）与人民币折算价格（元/克）的实时监控看板。
 单文件页面即可运行，同时内置 DSH Web 插件（`dsh-gold-monitor`），可嵌入 DeepSeek Harness 的浏览器界面。
-
+![Gold Live Monitor preview](preview.jpg)
 <p align="center">
   <img src="preview.jpg" width="820" alt="Gold Live Monitor 界面预览（1440×900）">
 </p>
