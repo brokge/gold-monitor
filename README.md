@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="preview.jpg" width="820" alt="Gold Live Monitor 界面预览（1440×900）">
+</p>
 # 黄金实时监控 · Gold Live Monitor
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
